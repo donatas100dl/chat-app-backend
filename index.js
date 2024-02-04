@@ -29,14 +29,21 @@ app.use(
 var usersConnected = 0
 io.on('connection', (socket) => {
   usersConnected++
-  console.log("users connected: " + usersConnected+ " ------- " + socket.id)
+  console.log("users connected: " + usersConnected)
   socket.on("sendMessage", (data, callback) => {
     callback("we got your msg")
     socket.broadcast.emit("brodcastMessage", data)
   })
   socket.on("joinRoom", (data, callback) => {
+    // Leave the previous room
+    if (socket.room) {
+      socket.leave(socket.room);
+    }
+  
+    // Join the new room
     socket.join(data.id);
-    callback("user joined room: " + data.id)
+    socket.room = data.id;
+    callback("user joined room: " + data.id);
   })
   socket.on("newMessage", (data, callback) => {
     // callback(data)
@@ -73,9 +80,9 @@ mongoose.set("strictQuery", false);
     useNewUrlParser: true,
     useUnifiedTopology: true,
   })
-  .then((result) => {
+  .then(() => {
     // Successfully connected
-    console.log("Connected to mongoose");
+    console.log(" Connected to mongoose");
   })
   .catch((err) => {
     console.log("Unable to connect to MongoDB. Error: " + err);
