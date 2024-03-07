@@ -8,7 +8,8 @@ const updateMessages = async (req, res) => {
 
   if (!room) return res.status(403).json({ message: "no room found" });
 
-  const authorized = user._id.equals(room.user_id_1) || user._id.equals(room.user_id_2);
+  const authorized =
+    user._id.equals(room.user_id_1) || user._id.equals(room.user_id_2);
 
   if (!authorized) {
     return res.status(403).json({ message: "user not authorized" });
@@ -16,45 +17,71 @@ const updateMessages = async (req, res) => {
   const updatedMessages = {
     $push: {
       messages: {
-        $each: messages.map(message => ({
+        $each: messages.map((message) => ({
           user_id: req.user.id,
-          body: message.body
-        }))
-      }
-    }
+          body: message.body,
+        })),
+      },
+    },
   };
-  
-  const response = await Rooms.findByIdAndUpdate(room._id, updatedMessages);
-  res.status(200).json({messages: response})
 
-}
+  const response = await Rooms.findByIdAndUpdate(room._id, updatedMessages);
+  res.status(200).json({ messages: response });
+};
 
 const messageRead = async (req, res) => {
   const room = await Rooms.findById(req.params.id);
-  const user = await Users.findById(req.user.id);
+  const roomId = req.params.id;
+  const user = req.user;
 
   if (!room) return res.status(403).json({ message: "no room found" });
 
   const authorized = user._id.equals(room.user_id_1) || user._id.equals(room.user_id_2);
 
+  const secondUserId = user._id.equals(room.user_id_1) ? room.user_id_2 : room.user_id_1
+
   if (!authorized) {
     return res.status(403).json({ message: "user not authorized" });
   }
 
-    const readMeesages = {
-      messages: {
-        $each: room.messages.map(message => ({
-          read: message.user_id !== req.user.id ? true : message.read
-        }))
-      }
-  };
+  const roomUpdatePromise = await Rooms.findOneAndUpdate(
+    { _id: roomId, 'messages.user_id': secondUserId, 'messages.read': false },
+    { $set: { 'messages.$[elem].read': true } },
+    { new: true, arrayFilters: [{ 'elem.user_id': secondUserId }] }
+  );
 
+  if (!roomUpdatePromise) {
+    return res.status(403).json({ message: "Room not found or user not authorized" });
+  }
+
+  const updatedMessages = roomUpdatePromise.messages;
+
+  res.status(200).json({ messages: updatedMessages });
+};
+const unreadMessages = async (req, res) => {
+  const room = await Rooms.findById(req.params.id);
+  const user = req.user;
+
+  if (!room) return res.status(403).json({ message: "no room found" });
+
+  const authorized =
+    user._id.equals(room.user_id_1) || user._id.equals(room.user_id_2);
+
+  if (!authorized) {
+    return res.status(403).json({ message: "user not authorized" });
+  }
+ 
+  const roomUpdatePromise = await Rooms.findOneAndUpdate(
+    { _id: room._id, 'messages.user_id': user._id },
+    { $set: { 'messages.$[].read': false } },
+    { new: true }
+  );
+
+  const updatedMessages = roomUpdatePromise.messages;
+
+  res.status(200).json({ messages: updatedMessages });
   
-  const response = await Rooms.findByIdAndUpdate(room._id, readMeesages);
-  res.status(200).json({messages: response})
-
-}
-
+};
 
 
 const createRoom = async (req, res) => {
@@ -63,7 +90,9 @@ const createRoom = async (req, res) => {
     const user = await Users.findOne({ _id: req.user.id });
 
     if (!user_id_1 || !user_id_2) {
-      return res.status(400).json({ message: "Didn't get user_1 or user_2 id" });
+      return res
+        .status(400)
+        .json({ message: "Didn't get user_1 or user_2 id" });
     }
     if (!(user._id.equals(user_id_1) || user._id.equals(user_id_2))) {
       return res.status(403).json({ message: "User not authorized" });
@@ -76,8 +105,6 @@ const createRoom = async (req, res) => {
       ],
     });
 
-    console.log(existingRoom);
-
     if (!existingRoom) {
       const newRoom = {
         user_id_1: user_id_1,
@@ -88,10 +115,12 @@ const createRoom = async (req, res) => {
       const response = await Rooms.create(newRoom);
 
       if (response) {
-        return res.status(201).json({ message: "Room created successfully", room: newRoom });
+        return res
+          .status(201)
+          .json({ message: "Room created successfully", room: newRoom });
       }
     } else {
-      return res.status(403).json({ message: "Room already exists" });
+      return res.status(203).json({ message: "Room already exists" });
     }
   } catch (err) {
     console.log("Error creating room", err);
@@ -103,4 +132,5 @@ module.exports = {
   createRoom,
   updateMessages,
   messageRead,
+  unreadMessages
 };
