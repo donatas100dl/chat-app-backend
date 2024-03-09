@@ -113,7 +113,7 @@ const login = async (req, res) => {
 
 const getCurrentUser = async (req, res) => {
   try {
-    const user = await Users.findById(req.user.id);
+    const user = req.user;
     const rooms = await Rooms.find({
       $or: [
         { user_id_1: { $in: [user._id] } },
